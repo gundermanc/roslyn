@@ -72,7 +72,7 @@ namespace Microsoft.CodeAnalysis.Remote
             {
                 Capabilities = new VSServerCapabilities()
                 {
-                    WorkspaceStreamingSymbolProvider = true
+                    WorkspaceSymbolProvider = true
                 }
             };
         }
@@ -97,8 +97,8 @@ namespace Microsoft.CodeAnalysis.Remote
             // we have this so that we don't get log file every time VS shutdown
         }
 
-        [JsonRpcMethod(VSSymbolMethods.WorkspaceBeginSymbolName)]
-        public Task<VSBeginSymbolParams> BeginWorkspaceSymbolAsync(string query, int searchId, CancellationToken cancellationToken)
+        [JsonRpcMethod(Methods.WorkspaceSymbolName)]
+        public Task<SymbolInformation[]> WorkspaceSymbolAsync(string query, IProgress<SymbolInformation[]> progress, CancellationToken cancellationToken)
         {
             return RunServiceAsync(async () =>
             {
@@ -107,19 +107,24 @@ namespace Microsoft.CodeAnalysis.Remote
                     // for now, we use whatever solution we have currently. in future, we will add an ability to sync VS's current solution
                     // on demand from OOP side
                     // https://github.com/dotnet/roslyn/issues/37424
-                    await SearchAsync(SolutionService.PrimaryWorkspace.CurrentSolution, query, searchId, cancellationToken).ConfigureAwait(false);
-                    return new VSBeginSymbolParams();
+                    return await SearchAsync(SolutionService.PrimaryWorkspace.CurrentSolution, query, progress, cancellationToken).ConfigureAwait(false);
                 }
             }, cancellationToken);
         }
 
-        private async Task SearchAsync(Solution solution, string query, int searchId, CancellationToken cancellationToken)
+        private async Task<SymbolInformation[]> SearchAsync(Solution solution, string query, IProgress<SymbolInformation[]> progress, CancellationToken cancellationToken)
         {
             var tasks = solution.Projects.Where(p => p.Language == _languageName).Select(p => SearchProjectAsync(p, cancellationToken)).ToArray();
             await Task.WhenAll(tasks).ConfigureAwait(false);
-            return;
 
-            async Task SearchProjectAsync(Project project, CancellationToken cancellationToken)
+            // Legacy clients don't support progressive notifications and require
+            // a batch of all items at the end but we can avoid paying this cost
+            // if we've already sent everything incrementally.
+            return progress == null ?
+                tasks.SelectMany(task => task.Result).ToArray() :
+                Array.Empty<SymbolInformation>();
+
+            async Task<SymbolInformation[]> SearchProjectAsync(Project project, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
@@ -132,10 +137,12 @@ namespace Microsoft.CodeAnalysis.Remote
 
                 var convertedResults = await ConvertAsync(results, cancellationToken).ConfigureAwait(false);
 
-                await InvokeAsync(
-                    VSSymbolMethods.WorkspacePublishSymbolName,
-                    new object[] { new VSPublishSymbolParams() { SearchId = searchId, Symbols = convertedResults } },
-                    cancellationToken).ConfigureAwait(false);
+                if (progress != null)
+                {
+                    progress.Report(convertedResults);
+                }
+
+                return convertedResults;
             }
         }
 

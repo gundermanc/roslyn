@@ -19,7 +19,7 @@ Namespace Microsoft.VisualStudio.LanguageServices.VisualBasic.LanguageClient
     ' https://devdiv.visualstudio.com/DevDiv/_workitems/edit/952373
     <ContentType(ContentTypeNames.VisualBasicContentType)>
     <Export(GetType(ILanguageClient))>
-    <ExportMetadata("Capabilities", "WorkspaceStreamingSymbolProvider")>
+    <ExportMetadata("Capabilities", "WorkspaceSymbolProvider")>
     Friend Class VisualBasicLanguageServerClient
         Inherits AbstractLanguageServerClient
 

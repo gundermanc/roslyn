@@ -23,7 +23,7 @@ namespace Microsoft.VisualStudio.LanguageServices.CSharp.LanguageClient
     // https://devdiv.visualstudio.com/DevDiv/_workitems/edit/952373
     [ContentType(ContentTypeNames.CSharpContentType)]
     [Export(typeof(ILanguageClient))]
-    [ExportMetadata("Capabilities", "WorkspaceStreamingSymbolProvider")]
+    [ExportMetadata("Capabilities", "WorkspaceSymbolProvider")]
     internal class CSharpLanguageServerClient : AbstractLanguageServerClient
     {
         [ImportingConstructor]
